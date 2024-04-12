@@ -107,7 +107,7 @@ func (m Mail) Send(ctx context.Context, subject, message string) error {
 		err = ctx.Err()
 	default:
 		if m.useTLS {
-			err = msg.SendWithTLS(m.smtpHostAddr, m.smtpAuth, m.tlsConfig)
+			err = msg.SendWithStartTLS(m.smtpHostAddr, m.smtpAuth, m.tlsConfig)
 		} else {
 			err = msg.Send(m.smtpHostAddr, m.smtpAuth)
 		}
