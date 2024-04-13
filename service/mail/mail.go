@@ -18,6 +18,7 @@ type Mail struct {
 	smtpAuth          smtp.Auth
 	receiverAddresses []string
 	useTLS            bool
+	useStartTLS       bool
 	tlsConfig         *tls.Config
 }
 
@@ -29,6 +30,7 @@ func New(senderAddress, smtpHostAddress string) *Mail {
 		smtpHostAddr:      smtpHostAddress,
 		receiverAddresses: []string{},
 		useTLS:            false,
+		useStartTLS:       false,
 	}
 }
 
@@ -49,6 +51,13 @@ const (
 //	-> https://pkg.go.dev/net/smtp#PlainAuth
 func (m *Mail) AuthenticateSMTP(identity, userName, password, host string) {
 	m.smtpAuth = smtp.PlainAuth(identity, userName, password, host)
+}
+
+// smtp.office365.com use AUTH LOGIN
+// solve the problem: 504 5.7.4 Unrecognized authentication type
+// https://github.com/go-gomail/gomail/issues/16#issuecomment-73672398
+func (m *Mail) AuthenticateSMTPWithLoginAuth(identity, userName, password, host string) {
+	m.smtpAuth = LoginAuth(userName, password)
 }
 
 // AddReceivers takes email addresses and adds them to the internal address list. The Send method will send
@@ -80,6 +89,16 @@ func (m *Mail) UnSetTLS() {
 	m.tlsConfig = nil
 }
 
+func (m *Mail) SetStartTLS(tlsConfig *tls.Config) {
+	m.useStartTLS = true
+	m.tlsConfig = tlsConfig
+}
+
+func (m *Mail) UnSetStartTLS() {
+	m.useStartTLS = false
+	m.tlsConfig = nil
+}
+
 func (m *Mail) newEmail(subject, message string) *email.Email {
 	msg := &email.Email{
 		To:      m.receiverAddresses,
@@ -106,8 +125,10 @@ func (m Mail) Send(ctx context.Context, subject, message string) error {
 	case <-ctx.Done():
 		err = ctx.Err()
 	default:
-		if m.useTLS {
+		if m.useStartTLS {
 			err = msg.SendWithStartTLS(m.smtpHostAddr, m.smtpAuth, m.tlsConfig)
+		} else if m.useTLS {
+			err = msg.SendWithTLS(m.smtpHostAddr, m.smtpAuth, m.tlsConfig)
 		} else {
 			err = msg.Send(m.smtpHostAddr, m.smtpAuth)
 		}
